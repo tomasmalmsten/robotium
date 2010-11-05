@@ -2,99 +2,114 @@ package com.jayway.android.robotium.solo;
 
 import junit.framework.Assert;
 import android.app.Activity;
+import android.app.ActivityManager;
 
 /**
- * This class contains assertActivity() methods.
+ * This class contains assertActivity() methods and assertLowMemory().
  * 
  * @author Renas Reda, renas.reda@jayway.com
  *
  */
 
 class Asserter {
-	private final ActivityUtils soloActivity;
-	private final int PAUS = 500;
-	
+	private final ActivityUtils activityUtils;
+    private final Sleeper sleeper;
+
 	/**
 	 * Constructs this object.
 	 *
-	 * @param soloActivity the activity to act upon.
+	 * @param activityUtils the {@code ActivityUtils} instance.
+     * @param sleeper the {@code Sleeper} instance.
 	 *
 	 */
 	
-	public Asserter(ActivityUtils soloActivity) {
-		this.soloActivity = soloActivity;
-	}
+	public Asserter(ActivityUtils activityUtils, Sleeper sleeper) {
+		this.activityUtils = activityUtils;
+        this.sleeper = sleeper;
+    }
 
-	/**
-	 * Method used to assert that an expected activity is currently active.
-	 * 
-	 * @param message the message that should be displayed if the assert fails
-	 * @param name the name of the activity that is expected to be active e.g. "MyActivity"
-	 * 
-	 */
-	
+    /**
+     * Asserts that an expected {@link Activity} is currently active one.
+     *
+     * @param message the message that should be displayed if the assert fails
+     * @param name the name of the {@code Activity} that is expected to be active e.g. {@code "MyActivity"}
+     *
+     */
+
 	public void assertCurrentActivity(String message, String name)
 	{
-		RobotiumUtils.sleep(PAUS);
-		Assert.assertEquals(message, name, soloActivity.getCurrentActivity()
+		sleeper.sleep();
+		Assert.assertEquals(message, name, activityUtils.getCurrentActivity()
 				.getClass().getSimpleName());
 		
 	}
 	
 	/**
-	 * Method used to assert that an expected activity is currently active.
-	 * 
-	 * @param message the message that should be displayed if the assert fails
-	 * @param expectedClass the class object that is expected to be active e.g. MyActivity.class
+     * Asserts that an expected {@link Activity} is currently active one.
+     *
+     * @param message the message that should be displayed if the assert fails
+	 * @param expectedClass the {@code Class} object that is expected to be active e.g. {@code MyActivity.class}
 	 * 
 	 */
 	
-	public void assertCurrentActivity(String message, Class expectedClass)
+	public void assertCurrentActivity(String message, Class<? extends Activity> expectedClass)
 	{
-		RobotiumUtils.sleep(PAUS);
-		Assert.assertEquals(message, expectedClass.getName(), soloActivity
+		sleeper.sleep();
+		Assert.assertEquals(message, expectedClass.getName(), activityUtils
 				.getCurrentActivity().getClass().getName());
 	
 	}
 	
 	/**
-	 * Method used to assert that an expected activity is currently active with the possibility to 
-	 * verify that the expected activity is a new instance of the activity.
+	 * Asserts that an expected {@link Activity} is currently active one, with the possibility to
+	 * verify that the expected {@code Activity} is a new instance of the {@code Activity}.
 	 * 
 	 * @param message the message that should be displayed if the assert fails
-	 * @param name the name of the activity that is expected to be active e.g. "MyActivity"
-	 * @param isNewInstance true if the expected activity is a new instance of the activity 
+	 * @param name the name of the {@code Activity} that is expected to be active e.g. {@code "MyActivity"}
+	 * @param isNewInstance {@code true} if the expected {@code Activity} is a new instance of the {@code Activity}
 	 * 
 	 */
 	
 	public void assertCurrentActivity(String message, String name, boolean isNewInstance)
 	{
 		assertCurrentActivity(message, name);
-		assertCurrentActivity(message, soloActivity.getCurrentActivity().getClass(),
+		assertCurrentActivity(message, activityUtils.getCurrentActivity().getClass(),
 				isNewInstance);
 	}
 	
 	/**
-	 * Method used to assert that an expected activity is currently active with the possibility to 
-	 * verify that the expected activity is a new instance of the activity.
+	 * Asserts that an expected {@link Activity} is currently active one, with the possibility to
+	 * verify that the expected {@code Activity} is a new instance of the {@code Activity}.
 	 * 
 	 * @param message the message that should be displayed if the assert fails
-	 * @param expectedClass the class object that is expected to be active e.g. MyActivity.class
-	 * @param isNewInstance true if the expected activity is a new instance of the activity
+	 * @param expectedClass the {@code Class} object that is expected to be active e.g. {@code MyActivity.class}
+	 * @param isNewInstance {@code true} if the expected {@code Activity} is a new instance of the {@code Activity}
 	 * 
 	 */
 	
-	public void assertCurrentActivity(String message, Class expectedClass,
+	public void assertCurrentActivity(String message, Class<? extends Activity> expectedClass,
 			boolean isNewInstance) {
 		boolean found = false;
 		assertCurrentActivity(message, expectedClass);
-		Activity activity = soloActivity.getCurrentActivity();
-		for (int i = 0; i < soloActivity.getAllOpenedActivities().size() - 1; i++) {
-			String instanceString = soloActivity.getAllOpenedActivities().get(i).toString();
+		Activity activity = activityUtils.getCurrentActivity(false);
+		for (int i = 0; i < activityUtils.getAllOpenedActivities().size() - 1; i++) {
+			String instanceString = activityUtils.getAllOpenedActivities().get(i).toString();
 			if (instanceString.equals(activity.toString()))
 				found = true;
 		}
 			Assert.assertNotSame(message + ", isNewInstance: actual and ", isNewInstance, found);
-	}	
+	}
+	
+	/**
+	 * Asserts that the available memory in the system is not low.
+	 * 
+	 */
+	
+	public void assertMemoryNotLow()
+	{
+		ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
+		((ActivityManager)activityUtils.getCurrentActivity().getSystemService("activity")).getMemoryInfo(mi);
+		Assert.assertFalse("Low memory available: " + mi.availMem + " bytes", mi.lowMemory);
+	}
 
 }

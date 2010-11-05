@@ -1,5 +1,7 @@
 package com.jayway.android.robotium.solo;
 
+import android.widget.Spinner;
+import junit.framework.Assert;
 import android.app.Instrumentation;
 import android.view.KeyEvent;
 
@@ -13,80 +15,94 @@ import android.view.KeyEvent;
 
 class Presser{
 
-	private final ViewFetcher soloView;
-	private final Clicker soloClick;
+	private final ViewFetcher viewFetcher;
+	private final Clicker clicker;
 	private final Instrumentation inst;
-	private final int PAUS = 500;
+    private final Sleeper sleeper;
 
     /**
      * Constructs this object.
      *
-     * @param soloView the {@link ViewFetcher} instance.
-     * @param soloClick the {@link Clicker} instance.
-     * @param inst the {@link Instrumentation} instance.
+     * @param viewFetcher the {@code ViewFetcher} instance.
+     * @param clicker the {@code Clicker} instance.
+     * @param inst the {@code Instrumentation} instance.
+     * @param sleeper the {@code Sleeper} instance.
      */
 	
-    public Presser(ViewFetcher soloView, Clicker soloClick, Instrumentation inst) {
-        this.soloView = soloView;
-        this.soloClick = soloClick;
-        this.inst = inst;
+	public Presser(ViewFetcher viewFetcher,
+                   Clicker clicker, Instrumentation inst, Sleeper sleeper) {
+
+		this.viewFetcher = viewFetcher;
+		this.clicker = clicker;
+		this.inst = inst;
+        this.sleeper = sleeper;
     }
 
 	
 	/**
-	 * Method used to press a MenuItem with a certain index. Index 0 is the first item in the 
-	 * first row and index 3 is the first item in the second row.
-	 * 
-	 * @param index the index of the menu item to be pressed
+	 * Presses a {@link android.view.MenuItem} with a given index. Index {@code 0} is the first item in the
+	 * first row, Index {@code 3} is the first item in the second row and
+	 * index {@code 5} is the first item in the third row.
+	 *
+	 * @param index the index of the {@code MenuItem} to be pressed
 	 * 
 	 */
 	
 	public void pressMenuItem(int index) {
+		sleeper.sleep();
 		inst.waitForIdleSync();
-		RobotiumUtils.sleep(PAUS);
 		try{
-		inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
-		RobotiumUtils.sleep(300);
-		inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
-		}catch(Throwable e)
-		{
-			e.printStackTrace();
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_MENU);
+			sleeper.sleepMini();
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+		}catch(SecurityException e){
+			Assert.assertTrue("Can not press the menu!", false);
 		}
 		if (index < 3) {
 			for (int i = 0; i < index; i++) {
-				RobotiumUtils.sleep(300);
+				sleeper.sleepMini();
 				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
 			}
-		} else
-		{
+		} else if (index >= 3 && index < 5) {
 			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);	
+
 			for (int i = 3; i < index; i++) {
-				RobotiumUtils.sleep(300);
+				sleeper.sleepMini();
+				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
+			}
+		} else if (index >= 5) {
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);	
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);	
+
+			for (int i = 5; i < index; i++) {
+				sleeper.sleepMini();
 				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_RIGHT);
 			}
 		}
+
 		try{
-		inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
-		}catch (Throwable e) {
-			e.printStackTrace();
-		}
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
+		}catch (SecurityException ignored) {}
 	}
-	
+
 	/**
-	 * Method used to press on a spinner (drop-down menu) item.
-	 * 
-	 * @param spinnerIndex the index of the spinner menu to be used
-	 * @param itemIndex the index of the spinner item to be pressed relative to the current selected item. 
-	 * A Negative number moves up on the spinner, positive down
+	 * Presses on a {@link android.widget.Spinner} (drop-down menu) item.
+	 *
+	 * @param spinnerIndex the index of the {@code Spinner} menu to be used
+	 * @param itemIndex the index of the {@code Spinner} item to be pressed relative to the currently selected item.
+	 * A Negative number moves up on the {@code Spinner}, positive moves down
 	 * 
 	 */
 	
 	public void pressSpinnerItem(int spinnerIndex, int itemIndex)
 	{
+		sleeper.sleep();
 		inst.waitForIdleSync();
-		RobotiumUtils.sleep(PAUS);
-		soloClick.clickOnScreen(soloView.getCurrentSpinners().get(spinnerIndex));
-		inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+		clicker.clickOnScreen(viewFetcher.getCurrentViews(Spinner.class).get(spinnerIndex));
+		try{
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+		}catch(SecurityException ignored){}
 		boolean countingUp = true;
 		if(itemIndex < 0){
 			countingUp = false;
@@ -94,15 +110,20 @@ class Presser{
 		}
 		for(int i = 0; i < itemIndex; i++)
 		{
-			RobotiumUtils.sleep(300);
+			sleeper.sleepMini();
 			if(countingUp){
-				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+				try{
+					inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_DOWN);
+				}catch(SecurityException ignored){}
 			}else{
-				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+				try{
+					inst.sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_UP);
+				}catch(SecurityException ignored){}
 			}
 		}
-		inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
-		
+		try{
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
+		}catch(SecurityException ignored){}
 	}
 	
 

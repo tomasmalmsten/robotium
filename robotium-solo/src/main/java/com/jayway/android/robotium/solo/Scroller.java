@@ -1,17 +1,15 @@
 package com.jayway.android.robotium.solo;
 
 import java.util.ArrayList;
-import java.util.Iterator;
-import android.app.Activity;
 import android.app.Instrumentation;
 import android.os.SystemClock;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.TextView;
+import android.widget.ListView;
+import android.widget.ScrollView;
 
 /**
-* This class contains scroll methods. Examples are scrollDownList(),
+* This class contains scroll methods. Examples are scrollDown(), scrollUpList(),
 * scrollToSide().
 * 
 * @author Renas Reda, renas.reda@jayway.com
@@ -20,26 +18,27 @@ import android.widget.TextView;
 
 class Scroller {
 	
+    public enum Direction {UP, DOWN}
+    public enum Side {LEFT, RIGHT}
 	private final Instrumentation inst;
-	private final ActivityUtils soloActivity;
-	private final ViewFetcher soloView;
-   	private TextView checkTextView = null;
-	private final static int RIGHT = 2;
-	private final static int LEFT = 3;
-	
+	private final ActivityUtils activityUtils;
+	private final ViewFetcher viewFetcher;
+	private final Sleeper sleeper;
+   	private int scrollAmount = 0;
 
     /**
      * Constructs this object.
      *
-     * @param inst the {@link Instrumentation} instance.
-     * @param soloActivity the {@link Activity} instance.
-     * @param soloView the {@link ViewFetcher} instance.
+     * @param inst the {@code Instrumentation} instance.
+     * @param activityUtils the {@code ActivityUtils} instance.
+     * @param viewFetcher the {@code ViewFetcher} instance.
      */
 	
-    public Scroller(Instrumentation inst, ActivityUtils soloActivity, ViewFetcher soloView) {
+    public Scroller(Instrumentation inst, ActivityUtils activityUtils, ViewFetcher viewFetcher, Sleeper sleeper) {
         this.inst = inst;
-        this.soloActivity = soloActivity;
-        this.soloView = soloView;
+        this.activityUtils = activityUtils;
+        this.viewFetcher = viewFetcher;
+        this.sleeper = sleeper;
     }
 
 	
@@ -64,12 +63,10 @@ class Scroller {
 		float x = fromX;
 		float yStep = (toY - fromY) / stepCount;
 		float xStep = (toX - fromX) / stepCount;
-		MotionEvent event = MotionEvent.obtain(downTime, eventTime,MotionEvent.ACTION_DOWN, fromX, y, 0);
+		MotionEvent event = MotionEvent.obtain(downTime, eventTime,MotionEvent.ACTION_DOWN, fromX, fromY, 0);
 		try {
 			inst.sendPointerSync(event);
-		} catch (Throwable e) {
-			e.printStackTrace();
-		}
+		} catch (SecurityException ignored) {}
 		for (int i = 0; i < stepCount; ++i) {
 			y += yStep;
 			x += xStep;
@@ -77,113 +74,163 @@ class Scroller {
 			event = MotionEvent.obtain(downTime, eventTime,MotionEvent.ACTION_MOVE, x, y, 0);
 			try {
 				inst.sendPointerSync(event);
-			} catch (Throwable e) {
-				e.printStackTrace();
-			}
+			} catch (SecurityException ignored) {}
 			inst.waitForIdleSync();
 		}
 		eventTime = SystemClock.uptimeMillis();
-		event = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_UP,fromX, y, 0);
+		event = MotionEvent.obtain(downTime, eventTime, MotionEvent.ACTION_UP,toX, toY, 0);
 		try {
 			inst.sendPointerSync(event);
-		} catch (Throwable e) {
-			e.printStackTrace();
-		}
+		} catch (SecurityException ignored) {}
 	}
-	
+
 	
 	/**
-	 * This method is used to scroll down a list or scroll view.
-	 *
-	 * @return true if more scrolling can be done and false if it is at the end of 
-	 * the scroll/list view 
-	 *
+	 * Scrolls a ScrollView.
+	 * 
+	 * @param direction the direction to be scrolled
+	 * @return {@code true} if more scrolling can be done
+	 * 
 	 */
 	
-	public boolean scrollDownList() {
-		boolean found = false;
-		View scrollListView = null;
-		Iterator<View> iterator = soloView.getViews().iterator();
-		while (iterator.hasNext()) {
-			scrollListView = (View) iterator.next();
-			if (scrollListView.getClass().getName().equals(
-					"android.widget.ScrollView")
-					|| scrollListView.getClass().getName().equals(
-							"android.widget.ListView")) {
-				found = true;
-				break;
-			}
+	private boolean scrollScrollView(Direction direction){
+		int yStart = 0;
+		int yEnd = 0;
+		int[] xy = new int[2];
+		int x = activityUtils.getCurrentActivity(false).getWindowManager()
+		.getDefaultDisplay().getWidth() / 2;
+		ScrollView scroll = viewFetcher.getCurrentViews(ScrollView.class).get(0);
+		scroll.getLocationOnScreen(xy);
+		
+		if (direction == Direction.DOWN) {
+			yStart = ((xy[1] + scroll.getHeight()) - 20);
+			yEnd = (xy[1] + 30);
 		}
-		ArrayList<TextView> textViewList = soloView.getCurrentTextViews(null);
-		int size = textViewList.size();
-		int constant = 0;
-		if(size>2)
-			constant = 2;
-		else
-			constant = size;
-		Activity currentActivity = soloActivity.getCurrentActivity();
-		int x = currentActivity.getWindowManager().getDefaultDisplay()
-				.getWidth() / 2;
-		int yStart;
-		int yEnd;
-		if (found) {
-			int[] xy = new int[2];
-			scrollListView.getLocationOnScreen(xy);
-			yStart = ((xy[1] + scrollListView.getHeight()) - 20);
-			yEnd = (xy[1]);
-		} else {
-			yStart = (currentActivity.getWindowManager().getDefaultDisplay()
-					.getHeight() - 20);
-			yEnd = ((currentActivity.getWindowManager().getDefaultDisplay()
-					.getHeight() / 2));
+		else if (direction == Direction.UP){
+			yStart = (xy[1] + 20);
+			yEnd = ((xy[1] + scroll.getHeight()) - 30);
 		}
-		drag(x, x, yStart, yEnd, 40);
-		if (checkTextView != null
-				&& !checkTextView.getText().equals(
-						soloView.getCurrentTextViews(null).get(
-								soloView.getCurrentTextViews(null).size()
-										- constant).getText())) {
-			checkTextView = textViewList.get(size - constant);
-			return true;
-		} else if (checkTextView == null) {
-			checkTextView = textViewList.get(size - constant);
-			return true;
-		} else {
+		
+		scrollAmount = scroll.getScrollY();
+		drag(x, x,getDragablePosition(yStart, direction), yEnd, 40);
+		if (scrollAmount == scroll.getScrollY()) {
 			return false;
 		}
+		else
+			return true;
 	}
 	
 	/**
-	 * This method is used to scroll up a list.
-	 *
+	 * Returns a y position that will not register a click and is appropriate for dragging.
+	 * @param y the y position
+	 * @param direction the direction of the drag
+	 * @return the y position that will not register a click
 	 */
 	
-	public void scrollUpList() {
-		Activity activity = soloActivity.getCurrentActivity();
-		int x = activity.getWindowManager().getDefaultDisplay().getWidth() / 2;
-		int y = activity.getWindowManager().getDefaultDisplay().getHeight();
-		Log.d("Instrumentation", "scrollUpList y: " + y);
-		drag(x, x, 200, y, 10);
+	private int getDragablePosition(int y, Direction direction){
+		ArrayList<View> touchItems = new ArrayList<View>();
+		int[] xyView = new int[2];
+		View decorView;
+		decorView = viewFetcher.getActiveDecorView();
+		if(decorView != null)
+			touchItems = decorView.getTouchables();
+		for(View view : touchItems){
+			view.getLocationOnScreen(xyView);
+
+			while(y > xyView[1] && y < (xyView[1] + view.getHeight())){
+				if(direction == Direction.DOWN){
+					y = y-5;
+				}
+				else{
+					y = y+5;
+				}
+			}
+		}
+		return y;
 	}
 	
 	/**
-	 * This method is used to scroll horizontally.
+	 * Scrolls up and down.
+	 * 
+	 * @param direction the direction in which to scroll
+	 * @return {@code true} if more scrolling can be done
+	 * 
+	 */
+	
+	public boolean scroll(Direction direction) {
+		sleeper.sleep();
+		inst.waitForIdleSync();
+		if (viewFetcher.getCurrentViews(ListView.class).size() > 0) {
+			return scrollList(0, direction);
+		} 
+
+		if (viewFetcher.getCurrentViews(ScrollView.class).size() > 0) {
+			return scrollScrollView(direction);
+		}
+			return false;
+
+	}
+
+	/**
+	 * Scrolls a list.
+	 * 
+	 * @param listIndex the list to be scrolled
+	 * @param direction the direction to be scrolled
+	 * @return {@code true} if more scrolling can be done
+	 * 
+	 */
+	
+	public boolean scrollList(int listIndex, Direction direction) {
+		int yStart = 0;
+		int yEnd = 0;
+		int[] xy = new int[2];
+		ListView listView = viewFetcher.getCurrentViews(ListView.class).get(listIndex);
+		listView.getLocationOnScreen(xy);
+
+		while (xy[1] + 20 > activityUtils.getCurrentActivity(false)
+				.getWindowManager().getDefaultDisplay().getHeight()) {
+			scrollScrollView(direction);
+			listView.getLocationOnScreen(xy);
+		}
+		if (direction == Direction.DOWN) {
+			if (listView.getLastVisiblePosition() >= listView.getCount() - 1) {
+				return false;
+			}
+			yStart = ((xy[1] + listView.getHeight()) - 20);
+			yEnd = (xy[1] + 30);
+		} else if (direction == Direction.UP) {
+			if (listView.getFirstVisiblePosition() < 0) {
+				return false;
+			}
+			yStart = ((xy[1]) + 30);
+			yEnd = (xy[1] + listView.getHeight());
+		}
+		int x = activityUtils.getCurrentActivity(false).getWindowManager()
+				.getDefaultDisplay().getWidth() / 2;
+		
+		drag(x, x, yStart, yEnd, 40);
+		return true;
+	}
+	
+	
+	/**
+	 * Scrolls horizontally.
 	 *
-	 * @param side the side in which to scroll
+	 * @param side the side to which to scroll; {@link Side#RIGHT} or {@link Side#LEFT}
 	 *
 	 */
 	
-	public void scrollToSide(int side) {
-		int screenHeight = soloActivity.getCurrentActivity().getWindowManager().getDefaultDisplay()
+	public void scrollToSide(Side side) {
+		int screenHeight = activityUtils.getCurrentActivity().getWindowManager().getDefaultDisplay()
 		.getHeight();
-		int screenWidth = soloActivity.getCurrentActivity().getWindowManager().getDefaultDisplay()
+		int screenWidth = activityUtils.getCurrentActivity(false).getWindowManager().getDefaultDisplay()
 		.getWidth();
 		float x = screenWidth / 2.0f;
 		float y = screenHeight / 2.0f;
-		if (side == LEFT)
-			drag(0, x, y, y, screenWidth);
-		else if (side == RIGHT)
-			drag(x, 0, y, y, screenWidth);
+		if (side == Side.LEFT)
+			drag(0, x, y, y, 40);
+		else if (side == Side.RIGHT)
+			drag(x, 0, y, y, 40);
 	}
 	
 

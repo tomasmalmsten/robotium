@@ -1,110 +1,81 @@
 package com.jayway.android.robotium.solo;
 
-import java.io.File;
-import java.io.FileOutputStream;
-
+import java.util.ArrayList;
 import junit.framework.Assert;
-import android.graphics.Bitmap;
-import android.test.TouchUtils;
-import android.util.Log;
+import android.app.Instrumentation;
+import android.view.KeyEvent;
 import android.view.View;
-import android.widget.EditText;
 
-class RobotiumUtils {	
+
+class RobotiumUtils {
 	
-	private ViewFetcher soloView;
-	private Searcher soloSearch;
-	private ActivityUtils soloActivity;
-	private final int TIMEOUT = 20000;
-	private final int PAUS = 500;
+	private final Instrumentation inst;
+	private final Sleeper sleeper;
+
+    /**
+	 * Constructs this object.
+	 * 
+     * @param inst the {@code Instrumentation} instance.
+     * @param sleeper the {@code Sleeper} instance.
+     */
 	
-	public RobotiumUtils(ActivityUtils activityUtils ,Searcher searcher, ViewFetcher viewFetcher)
-	{
-		soloActivity = activityUtils;
-		soloSearch = searcher;
-		soloView = viewFetcher;
+	public RobotiumUtils(Instrumentation inst, Sleeper sleeper) {
+		this.inst = inst;
+        this.sleeper = sleeper;
+    }
+   
+	
+	/**
+	 * Simulates pressing the hardware back key.
+	 * 
+	 */
+	
+	public void goBack() {
+		sleeper.sleep();
+		inst.waitForIdleSync();
+		try {
+			inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+			sleeper.sleep();
+		} catch (Throwable e) {}
 	}
 	
 	
 	/**
-	 * Used to trigger a sleep.
-	 *
-	 * @param time the length of the sleep
-	 *
+	 * Tells Robotium to send a key code: Right, Left, Up, Down, Enter or other.
+	 * @param keycode the key code to be sent. Use {@link KeyEvent#KEYCODE_ENTER}, {@link KeyEvent#KEYCODE_MENU}, {@link KeyEvent#KEYCODE_DEL}, {@link KeyEvent#KEYCODE_DPAD_RIGHT} and so on...
+	 * 
 	 */
 	
-	public static void sleep(int time) {
-		try {
-			Thread.sleep(time);
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+	public void sendKeyCode(int keycode)
+	{
+		sleeper.sleep();
+		inst.waitForIdleSync();
+		try{
+			inst.sendCharacterSync(keycode);
+		}catch(SecurityException e){
+			Assert.assertTrue("Can not complete action!", false);
 		}
 	}
-	
-	 /**
-     * Clears the value of an edit text
-     * 
-     * @param index the index of the edit text that should be cleared
-     */
-	
-    public void clearEditText(int index)
-    {
-        soloActivity.waitForIdle();
-    	final EditText editText = soloView.getCurrentEditTexts().get(index);
 
-        soloActivity.getCurrentActivity().runOnUiThread(new Runnable()
-        {
-            public void run()
-            {
-                editText.setText("");
-            }
-        });
-    }
-    
-    /**
-	 * Waits for a text to be shown. Default timeout is 20 seconds. 
+	/**
+	 * Removes invisible {@code View}s
 	 * 
-	 * @param text the text that needs to be shown
-	 * @return true if text is found and false if it is not found before the timeout
-	 * 
+	 * @param viewList an {@code ArrayList} with {@code View}s that is being checked for invisible {@code View}s.
+	 * @return a filtered {@code ArrayList} with no invisible {@code View}s.
 	 */
 	
-	public boolean waitForText(String text) {
-
-		return waitForText(text, 0, TIMEOUT);
+	public static <T extends View> ArrayList<T> removeInvisibleViews(ArrayList<T> viewList) {
+		ArrayList<T> tmpViewList = new ArrayList<T>(viewList.size());
+		for (T view : viewList) {
+			if (view != null && view.getVisibility() != View.GONE
+					&& view.getVisibility() != View.INVISIBLE) {
+				tmpViewList.add(view);
+			}
+		}
+		return tmpViewList;
 	}
-
 	
-	 /**
-	 * Waits for a text to be shown. 
-	 * 
-	 * @param text the text that needs to be shown
-	 * @param matches the number of matches of text that must be shown. 0 means any number of matches
-	 * @param timeout the the amount of time in milliseconds to wait
-	 * @return true if text is found and false if it is not found before the timeout
-	 * 
-	 */
 	
-	public boolean waitForText(String text, int matches, long timeout)
-    {
-		long now = System.currentTimeMillis();
-        final long endTime = now + timeout;
-
-        while (!soloSearch.searchForText(text, matches) && !soloSearch.searchForEditText(text) && now < endTime)
-        {
-        	 now = System.currentTimeMillis();
-        	
-        }
-        now = System.currentTimeMillis();
-
-        if (now > endTime)
-        	return false;
-        
-       return true;
-    }
-
-
 	
 
 }

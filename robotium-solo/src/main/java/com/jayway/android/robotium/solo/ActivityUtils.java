@@ -1,16 +1,17 @@
 package com.jayway.android.robotium.solo;
 
 import java.util.ArrayList;
-import java.util.Iterator;
+import junit.framework.Assert;
 import android.app.Activity;
 import android.app.Instrumentation;
 import android.app.Instrumentation.ActivityMonitor;
 import android.content.IntentFilter;
-import android.view.View;
+import android.util.Log;
+import android.view.KeyEvent;
 
 /**
  * This class contains activity related methods. Examples are:
- * getCurrentActivity(), getActivityList().
+ * getCurrentActivity(), getActivityList(), getAllOpenedActivities().
  * 
  * @author Renas Reda, renas.reda@jayway.com
  * 
@@ -21,28 +22,30 @@ class ActivityUtils {
 	private final Instrumentation inst;
 	private ActivityMonitor activityMonitor;
 	private Activity activity;
+    private final Sleeper sleeper;
 	private ArrayList<Activity> activityList = new ArrayList<Activity>();
-	private final int PAUS = 500;
 
 	/**
 	 * Constructor that takes in the instrumentation and the start activity.
 	 *
-	 * @param inst the instrumentation object
-	 * @param activity the start activity
-	 *
+	 * @param inst the {@code Instrumentation} instance.
+     * @param activity the start {@code Activity}
+     * @param sleeper the {@code Sleeper} instance
+     *
 	 */
 	
-	public ActivityUtils(Instrumentation inst, Activity activity) {
+	public ActivityUtils(Instrumentation inst, Activity activity, Sleeper sleeper) {
 		this.inst = inst;
 		this.activity = activity;
-		setupActivityMonitor();
-		
+        this.sleeper = sleeper;
+        setupActivityMonitor();
 	}
 	
 	/**
-	 * This method returns an ArrayList of all the opened/active activities.
+	 * Returns a {@code List} of all the opened/active activities.
 	 * 
-	 * @return ArrayList of all the opened activities
+	 * @return a {@code List} of all the opened/active activities
+	 * 
 	 */
 	
 	public ArrayList<Activity> getAllOpenedActivities()
@@ -62,42 +65,56 @@ class ActivityUtils {
 		try {
 			IntentFilter filter = null;
 			activityMonitor = inst.addMonitor(filter, null, false);
-		} catch (Throwable e) {
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 
 	/**
-	 * Public method that sets the Orientation (Landscape/Portrait) for the current activity.
+	 * Sets the Orientation (Landscape/Portrait) for the current activity.
 	 * 
-	 * @param orientation the orientation to be set. 0 for landscape and 1 for portrait 
+	 * @param orientation An orientation constant such as {@link android.content.pm.ActivityInfo#SCREEN_ORIENTATION_LANDSCAPE} or {@link android.content.pm.ActivityInfo#SCREEN_ORIENTATION_PORTRAIT}.
 	 *  
 	 */
 	
 	public void setActivityOrientation(int orientation)
 	{
 		if(activity.equals(getCurrentActivity()))
-			RobotiumUtils.sleep(PAUS);
-		Activity activity = getCurrentActivity();
+			sleeper.sleep();
+		Activity activity = getCurrentActivity(false);
 		activity.setRequestedOrientation(orientation);	
 	}
 
 	/**
-	 * This method returns the current activity.
+	 * Returns the current {@code Activity}, after sleeping a default pause length.
 	 *
-	 * @return current activity
+	 * @return the current {@code Activity}
 	 *
 	 */
 	
 	public Activity getCurrentActivity() {
-		inst.waitForIdleSync();
+	    return getCurrentActivity(true);
+	}
+	
+	/**
+	 * Returns the current {@code Activity}.
+	 *
+	 * @param shouldSleepFirst whether to sleep a default pause first
+	 * @return the current {@code Activity}
+	 * 
+	 */
+	
+	public Activity getCurrentActivity(boolean shouldSleepFirst) {
+		if(shouldSleepFirst){
+			sleeper.sleep();
+			inst.waitForIdleSync();
+		}
 		Boolean found = false;
 		if (activityMonitor != null) {
 			if (activityMonitor.getLastActivity() != null)
 				activity = activityMonitor.getLastActivity();
 		}
-		Iterator<Activity> iterator = activityList.iterator();
-		while (iterator.hasNext()) {
-			Activity storedActivity = iterator.next();
+		for(Activity storedActivity : activityList){
 			if (storedActivity.getClass().getName().equals(
 					activity.getClass().getName()))
 				found = true;
@@ -111,29 +128,70 @@ class ActivityUtils {
 	}
 	
 	/**
-	 * Private method used instead of instrumentation.waitForIdleSync().
+	 * Waits for the given {@link Activity}.
 	 *
+	 * @param name the name of the {@code Activity} to wait for e.g. {@code "MyActivity"}
+	 * @param timeout the amount of time in milliseconds to wait
+	 * @return {@code true} if {@code Activity} appears before the timeout and {@code false} if it does not
+	 * 
 	 */
 	
-	public void waitForIdle() {
-		RobotiumUtils.sleep(PAUS);
-		if(getCurrentActivity()!=null)
-		activity = getCurrentActivity();
-		long startTime = System.currentTimeMillis();
-		long timeout = 10000;
-		long endTime = startTime + timeout;
-		View decorView;
-		ArrayList<View> touchItems;
-		while (System.currentTimeMillis() <= endTime) {
-			decorView = activity.getWindow()
-					.getDecorView();
-			touchItems = decorView.getTouchables();
-			if (touchItems.size() > 0)  
-				break;
-			RobotiumUtils.sleep(PAUS);
+	public boolean waitForActivity(String name, int timeout)
+	{
+        long now = System.currentTimeMillis();
+        final long endTime = now + timeout;
+		while(!getCurrentActivity().getClass().getSimpleName().equals(name) && now < endTime)
+		{	
+			now = System.currentTimeMillis();
+		}
+		if(now < endTime)
+			return true;
+		else
+			return false;
+	}
+	
+	/**
+	 * Returns to the given {@link Activity}.
+	 *
+	 * @param name the name of the {@code Activity} to return to, e.g. {@code "MyActivity"}
+	 * 
+	 */
+	
+	public void goBackToActivity(String name)
+	{
+		boolean found = false;
+		for(Activity activity : activityList){
+			if(activity.getClass().getSimpleName().equals(name))
+				found = true;
+		}
+		if(found){
+			while(!getCurrentActivity().getClass().getSimpleName().equals(name))
+			{
+				try{
+				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
+				}catch(SecurityException e){
+					Assert.assertTrue("Activity named " + name + " can not be returned to", false);}
+			}
+		}
+		else{
+			for (int i = 0; i < activityList.size(); i++)
+				Log.d("Robotium", "Activity priorly opened: "+ activityList.get(i).getClass().getSimpleName());
+			Assert.assertTrue("No Activity named " + name + " has been priorly opened", false);
 		}
 	}
 	
+	/**
+	 * Returns a localized string
+	 * 
+	 * @param resId the resource ID for the string
+	 * @return the localized string
+	 * 
+	 */
+	
+	public String getString(int resId)
+	{
+		return activity.getString(resId);
+	}
 	
 	/**
 	 *
@@ -146,12 +204,10 @@ class ActivityUtils {
 			for (int i = 0; i < activityList.size(); i++) {
 				activityList.get(i).finish();
 			}
-			getCurrentActivity().finish();
+			getCurrentActivity(false).finish();
 			activityList.clear();
 		
-		} catch (Throwable e) {
-			
-		}
+		} catch (Exception ignored) {}
 		super.finalize();
 	}
 

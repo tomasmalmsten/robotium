@@ -1,9 +1,9 @@
 package com.jayway.android.robotium.solo;
 
+import java.util.ArrayList;
 import junit.framework.Assert;
-import android.app.Activity;
-import android.app.Instrumentation;
-import android.view.KeyEvent;
+import android.widget.EditText;
+
 
 /**
  * This class contains a method to enter text into text fields.
@@ -14,69 +14,64 @@ import android.view.KeyEvent;
 
 class TextEnterer{
 	
-	private final ViewFetcher soloView;
-	private final ActivityUtils soloActivity;
-	private final Clicker soloClick;
-	private final Instrumentation inst;
-
+	private final ActivityUtils activityUtils;
+	private final ViewFetcher viewFetcher;
+	private final Waiter waiter;
+	
     /**
      * Constructs this object.
      *
-     * @param soloView the {@link ViewFetcher} instance.
-     * @param soloActivity the {@link Activity} instance.
-     * @param soloClick the {@link Clicker} instance.
-     * @param inst the {@link Instrumentation} instance.
+     * @param activityUtils the {@code ActivityUtils} instance
+     * @param viewFetcher the {@code ViewFetcher} instance
+     * @param waiter the {@code Waiter} instance
      */
-    public TextEnterer(ViewFetcher soloView, ActivityUtils soloActivity, Clicker soloClick, Instrumentation inst) {
-        this.soloView = soloView;
-        this.soloActivity = soloActivity;
-        this.soloClick = soloClick;
-        this.inst = inst;
+	
+    public TextEnterer(ActivityUtils activityUtils, ViewFetcher viewFetcher, Waiter waiter) {
+        this.activityUtils = activityUtils;
+        this.viewFetcher = viewFetcher;
+        this.waiter = waiter;
     }
 
-	
-	/**
-	 * This method is used to enter text into an EditText or a NoteField with a certain index.
-	 *
-	 * @param index the index of the text field. Index 0 if only one available.
-	 * @param text the text string that is to be entered into the text field
-	 *
-	 */
-	
-	public void enterText(int index, String text) {
-		soloActivity.waitForIdle();
-		Activity activity = soloActivity.getCurrentActivity();
-		Boolean focused = false;
-		try {
-			if (soloView.getCurrentEditTexts().size() > 0) {
-				for (int i = 0; i < soloView.getCurrentEditTexts().size(); i++) {
-					if (soloView.getCurrentEditTexts().get(i).isFocused())
-						focused = true;
-				}
-			}
-			if (!focused && soloView.getCurrentEditTexts().size() > 0) {
-				soloClick.clickOnScreen(soloView.getCurrentEditTexts().get(index));
-				inst.sendStringSync(text);
-				inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
-				if (activity.equals(soloActivity.getCurrentActivity()))
-					inst.sendKeyDownUpSync(KeyEvent.KEYCODE_ENTER);
-			} else if (focused && soloView.getCurrentEditTexts().size() >1)
-			{
-				soloClick.clickOnScreen(soloView.getCurrentEditTexts().get(index));
-				inst.sendStringSync(text);
-			}
-			else {
-				try {
-					inst.sendStringSync(text);
-				} catch (Throwable e) {}
-			}
-		} catch (IndexOutOfBoundsException e) {
-			e.printStackTrace();
-			Assert.assertTrue("Index is not valid", false);
-		} catch (NullPointerException e) {
-			Assert.assertTrue("NullPointerException", false);
-		}
-		
-	}
 
+	
+	 /**
+    * Sets an {@code EditText} text
+    * 
+    * @param index the index of the {@code EditText} 
+    * @param text the text that should be set
+    */
+	
+    public void setEditText(int index, final String text)
+    {
+    	waiter.waitForIdle();    
+    	try{
+    		ArrayList<EditText> editTextViews= viewFetcher.getCurrentViews(EditText.class);
+    		editTextViews = RobotiumUtils.removeInvisibleViews(editTextViews);
+    		final EditText	editText = editTextViews.get(index);
+    		if(editText != null){
+    			final String previousText = editText.getText().toString();
+    			if(!editText.isEnabled())
+    				Assert.assertTrue("Edit text with index " + index + " is not enabled", false);
+
+    			activityUtils.getCurrentActivity(false).runOnUiThread(new Runnable()
+    			{
+    				public void run()
+    				{
+    					if(text.equals(""))
+    						editText.setText(text);
+    					else{
+    						editText.setText(previousText + text);
+    						editText.setCursorVisible(false);
+    					}
+    				}
+    			});
+    		}
+    	}catch(IndexOutOfBoundsException e){
+    		Assert.assertTrue("No edit text with index " + index + " is found", false);
+    	}
+    }
+   
+
+	
+	
 }

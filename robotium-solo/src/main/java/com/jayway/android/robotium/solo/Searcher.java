@@ -1,19 +1,16 @@
 package com.jayway.android.robotium.solo;
 
-import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.Collection;
+import java.util.concurrent.Callable;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import android.app.Instrumentation;
 import android.util.Log;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.TextView;
-import android.widget.ToggleButton;
 
 /**
- * This class contains various search methods. Examples are: searchEditText(),
- * searchText(), searchButton().
+ * This class contains various search methods. Examples are: searchForEditTextWithTimeout(),
+ * searchForTextWithTimeout(), searchForButtonWithTimeout().
  * 
  * @author Renas Reda, renas.reda@jayway.com
  * 
@@ -21,301 +18,141 @@ import android.widget.ToggleButton;
 
 class Searcher {
 	
-	private final ViewFetcher soloView;
-	private final Scroller soloScroll;
+	private final ViewFetcher viewFetcher;
+	private final Scroller scroller;
 	private final Instrumentation inst;
-	private final int PAUS = 500;
+    private final Sleeper sleeper;
 	private final int TIMEOUT = 5000;
-
+	private final String LOG_TAG = "Robotium";
+	
     /**
      * Constructs this object.
      *
-     * @param soloView the {@link ViewFetcher} instance.
-     * @param soloScroll the {@link Scroller} instance.
-     * @param inst the {@link Instrumentation} instance.
+     * @param viewFetcher the {@code ViewFetcher} instance.
+     * @param scroller the {@code Scroller} instance.
+     * @param inst the {@code Instrumentation} instance.
+     * @param sleeper the {@code Sleeper} instance.
      */
-    public Searcher(ViewFetcher soloView, Scroller soloScroll, Instrumentation inst) {
-        this.soloView = soloView;
-        this.soloScroll = soloScroll;
+	
+    public Searcher(ViewFetcher viewFetcher, Scroller scroller, Instrumentation inst, Sleeper sleeper) {
+        this.viewFetcher = viewFetcher;
+        this.scroller = scroller;
         this.inst = inst;
+        this.sleeper = sleeper;
     }
-
 
 
 	/**
-	 * Searches for a text string in the edit texts located in the current
-	 * activity.
+	 * Searches for a {@code View} with the given regex string and returns {@code true} if the
+	 * searched {@code Button} is found a given number of times. Will automatically scroll when needed.
 	 *
-	 * @param search the search string to be searched. Regular expressions are supported
-	 * @return true if an edit text with the given text is found or false if it is not found
+	 * @param viewClass what kind of {@code View} to search for, e.g. {@code Button.class} or {@code TextView.class}
+	 * @param regex the text to search for. The parameter <strong>will</strong> be interpreted as a regular expression.
+	 * @param expectedMinimumNumberOfMatches the minimum number of matches expected to be found. {@code 0} matches means that one or more
+	 * matches are expected to be found
+	 * @param scroll whether scrolling should be performed
+	 * @param onlyVisible {@code true} if only texts visible on the screen should be searched
+	 * @return {@code true} if a {@code View} of the specified class with the given text is found a given number of
+	 * times, and {@code false} if it is not found
 	 *
 	 */
-    
-    public boolean searchEditText(String search) {
-        long now = System.currentTimeMillis();
-        final long endTime = now + TIMEOUT;
-        while (!searchForEditText(search) && now < endTime)
-        {
-		RobotiumUtils.sleep(PAUS);        	
-		now = System.currentTimeMillis();
-        }
-        return searchForEditText(search);
-    }
 	
-    /**
-	 * Searches for a text string in the edit texts located in the current
-	 * activity.
-	 *
-	 * @param search the search string to be searched. Regular expressions are supported
-	 * @return true if an edit text with the given text is found or false if it is not found
-	 *
-	 */
-    
-	public boolean searchForEditText(String search) {
-		inst.waitForIdleSync();
-		Pattern p = Pattern.compile(search);
-		Matcher matcher;
-		ArrayList<EditText> editTextList = soloView.getCurrentEditTexts();
-		Iterator<EditText> iterator = editTextList.iterator();
-		while (iterator.hasNext()) {
-			EditText editText = (EditText) iterator.next();
-			matcher = p.matcher(editText.getText().toString());
-			if (matcher.find()) {
+	public boolean searchWithTimeoutFor(Class<? extends TextView> viewClass, String regex, int expectedMinimumNumberOfMatches, boolean scroll, boolean onlyVisible) {
+		final long endTime = System.currentTimeMillis() + TIMEOUT;
+
+		while (System.currentTimeMillis() < endTime) {
+			sleeper.sleep();
+			final boolean foundAnyMatchingView = searchFor(viewClass, regex, expectedMinimumNumberOfMatches, scroll, onlyVisible);
+			if (foundAnyMatchingView){
 				return true;
 			}
 		}
-		if (soloScroll.scrollDownList())
-			return searchForEditText(search);
-		else
-			return false;
+
+		return false;
 	}
+
+
+    /**
+     * Searches for a {@code View} with the given regex string and returns {@code true} if the
+     * searched {@code View} is found a given number of times
+     *
+     * @param viewClass what kind of {@code View} to search for, e.g. {@code Button.class} or {@code TextView.class}
+     * @param regex the text to search for. The parameter <strong>will</strong> be interpreted as a regular expression.
+     * @param expectedMinimumNumberOfMatches the minimum number of matches expected to be found. {@code 0} matches means that one or more
+     * matches are expected to be found.
+     * @param scroll whether scrolling should be performed
+     * @param onlyVisible {@code true} if only texts visible on the screen should be searched
+     * @return {@code true} if a view of the specified class with the given text is found a given number of times.
+     * {@code false} if it is not found.
+     *
+     */
 	
-	
-	/**
-	 * Searches for a button with the given search string and returns true if at least one button 
-	 * is found with the expected text
-	 *
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @return true if a button with the given text is found and false if it is not found
-	 *
-	 */
-	
-	public boolean searchButton(String search) {
-		return searchButton(search, 0);
-	}
-	
-	/**
-	 * Searches for a toggle button with the given search string and returns true if at least one button 
-	 * is found with the expected text
-	 *
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @return true if a toggle button with the given text is found and false if it is not found
-	 *
-	 */
-	
-	public boolean searchToggleButton(String search) {
-		return searchToggleButton(search, 0);
-	}
-	
-	/**
-	 * Searches for a button with the given search string and returns true if the 
-	 * searched button is found a given number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if a button with the given text is found a given number of times and false 
-	 * if it is not found
-	 *  
-	 */
-	
-	public boolean searchButton(String search, int matches) {
-		
-        long now = System.currentTimeMillis();
-        final long endTime = now + TIMEOUT;
-        while (!searchForButton(search, matches) && now < endTime)
-        {
-        	now = System.currentTimeMillis();
+    public <T extends TextView> boolean searchFor(final Class<T> viewClass, final String regex, final int expectedMinimumNumberOfMatches, final boolean scroll, final boolean onlyVisible) {
+        final Callable<Collection<T>> viewFetcherCallback = new Callable<Collection<T>>() {
+            public Collection<T> call() throws Exception {
+                inst.waitForIdleSync();
+                
+                if(onlyVisible)
+                return RobotiumUtils.removeInvisibleViews(viewFetcher.getCurrentViews(viewClass));
+                
+                return viewFetcher.getCurrentViews(viewClass);
+            }
+        };
+        try {
+            return searchFor(viewFetcherCallback, regex, expectedMinimumNumberOfMatches, scroll);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-        return searchForButton(search, matches);
-	}
-	
+
+    }
+    
+
 	/**
-	 * Searches for a button with the given search string and returns true if the 
-	 * searched button is found a given number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if a button with the given text is found a given number of times and false 
-	 * if it is not found
-	 *  
-	 */
+	 * Searches for a {@code View} with the given regex string and returns {@code true} if the
+	 * searched {@code View} is found a given number of times. Will not scroll, because the caller needs to find new
+     * {@code View}s to evaluate after scrolling, and call this method again.
+	 *
+	 * @param viewFetcherCallback callback which should return an updated collection of views to search
+	 * @param regex the text to search for. The parameter <strong>will</strong> be interpreted as a regular expression.
+	 * @param expectedMinimumNumberOfMatches the minimum number of matches expected to be found. {@code 0} matches means that one or more
+	 * matches are expected to be found.
+	 * @param scroll whether scrolling should be performed
+     * @return {@code true} if a view of the specified class with the given text is found a given number of times.
+	 * {@code false} if it is not found.
+	 *
+     * @throws Exception not really, it's just the signature of {@code Callable}
+     */
 	
-	private boolean searchForButton(String search, int matches) {
-		inst.waitForIdleSync();
-		RobotiumUtils.sleep(PAUS);
-		Pattern p = Pattern.compile(search);
-		Matcher matcher;
-		int countMatches=0;
-		ArrayList<Button> buttonList = soloView.getCurrentButtons();
-		Iterator<Button> iterator = buttonList.iterator();
-		while (iterator.hasNext()) {
-			Button button = (Button) iterator.next();
-			matcher = p.matcher(button.getText().toString());
-			if(matcher.find()){	
-				countMatches++;
+	public <T extends TextView> boolean searchFor(Callable<Collection<T>> viewFetcherCallback, String regex, int expectedMinimumNumberOfMatches, boolean scroll) throws Exception {
+
+		if(expectedMinimumNumberOfMatches == 0) {
+			expectedMinimumNumberOfMatches = 1;
+		}
+		int matchesFound = 0;
+
+		final Pattern pattern = Pattern.compile(regex);
+
+        final Collection<T> views = viewFetcherCallback.call();
+        for(T view : views){
+			final Matcher matcher = pattern.matcher(view.getText().toString());
+			if (matcher.find()){
+				matchesFound++;
+			}
+			if (matchesFound == expectedMinimumNumberOfMatches) {
+				return true;
 			}
 		}
-		if (countMatches == matches && matches != 0) {
-			return true;
-		} else if (matches == 0 && countMatches > 0) {
-			return true;
-		} else if (soloScroll.scrollDownList())
-		{
-			return searchForButton(search, matches);
-		} else {
-			return false;
-		}
 
-	}
-	/**
-	 * Searches for a toggle button with the given search string and returns true if the 
-	 * searched toggle button is found a given number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if a toggle button with the given text is found a given number of times and false 
-	 * if it is not found
-	 *  
-	 */
-	
-	public boolean searchToggleButton(String search, int matches) {
-        long now = System.currentTimeMillis();
-        final long endTime = now + TIMEOUT;
-        while (!searchForToggleButton(search, matches) && now < endTime)
-        {
-        	now = System.currentTimeMillis();
+        if (scroll && scroller.scroll(Scroller.Direction.DOWN)) {
+            sleeper.sleep();
+            return searchFor(viewFetcherCallback, regex, expectedMinimumNumberOfMatches, scroll);
+        } else {
+            if (matchesFound > 0) {
+                Log.d(LOG_TAG, " There are only " + matchesFound + " matches of " + regex);
+            }
+            return false;
         }
-        return searchForToggleButton(search, matches);
 	}
-	
-	
-	/**
-	 * Searches for a toggle button with the given search string and returns true if the 
-	 * searched toggle button is found a given number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if a toggle button with the given text is found a given number of times and false 
-	 * if it is not found
-	 *  
-	 */
-	
-	private boolean searchForToggleButton(String search, int matches) {
-		inst.waitForIdleSync();
-		RobotiumUtils.sleep(PAUS);
-		Pattern p = Pattern.compile(search);
-		Matcher matcher;
-		int countMatches=0;
-		ArrayList<ToggleButton> toggleButtonList = soloView.getCurrentToggleButtons();
-		Iterator<ToggleButton> iterator = toggleButtonList.iterator();
-		while (iterator.hasNext()) {
-			ToggleButton toggleButton = (ToggleButton) iterator.next();
-			matcher = p.matcher(toggleButton.getText().toString());
-			if(matcher.find()){	
-				countMatches++;
-			}
-		}
-		if (countMatches == matches && matches != 0) {
-			return true;
-		} else if (matches == 0 && countMatches > 0) {
-			return true;
-		} else if (soloScroll.scrollDownList())
-		{
-			return searchForToggleButton(search, matches);
-		} else {
-			return false;
-		}
 
-	}
-	/**
-	 * Searches for a text string and returns true if at least one item 
-	 * is found with the expected text
-	 *
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @return true if the search string is found and false if it is not found
-	 *
-	 */
-	
-	public boolean searchText(String search) {
-		return searchText(search, 0);
-	}
-	
-	/**
-	 * Searches for a text string and returns true if the searched text is found a given
-	 * number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if search string is found a given number of times and false if the search string
-	 * is not found
-	 *  
-	 */
-	
-	public boolean searchText(String search, int matches) {
-        long now = System.currentTimeMillis();
-        final long endTime = now + TIMEOUT;
-        while (!searchForText(search, matches) && now < endTime)
-        {
-        	now = System.currentTimeMillis();
-        }
-        return searchForText(search, matches);
-	}
-	
-	/**
-	 * Searches for a text string and returns true if the searched text is found a given
-	 * number of times
-	 * 
-	 * @param search the string to be searched. Regular expressions are supported
-	 * @param matches the number of matches expected to be found. 0 matches means that one or more 
-	 * matches are expected to be found
-	 * @return true if search string is found a given number of times and false if the search string
-	 * is not found
-	 *  
-	 */
-	
-	public boolean searchForText(String search, int matches) {
-		inst.waitForIdleSync();
-		RobotiumUtils.sleep(PAUS);
-		Pattern p = Pattern.compile(search);
-		Matcher matcher;
-		int countMatches = 0;
-		ArrayList<TextView> textViewList = soloView.getCurrentTextViews(null);
-		Iterator<TextView> iterator = textViewList.iterator();
-		TextView textView = null;
-		while (iterator.hasNext()) {
-			textView = (TextView) iterator.next();
-			matcher = p.matcher(textView.getText().toString());
-			if(matcher.find()){	
-				countMatches++;
-			}
-		}
-		if (countMatches == matches && matches != 0) {
-			return true;
-		} else if (matches == 0 && countMatches > 0) {
-			return true;
-		} else if (soloScroll.scrollDownList()) 
-		{
-			return searchForText(search, matches);
-		} else {
-			return false;
-		}
-
-	}
-	
 
 }
